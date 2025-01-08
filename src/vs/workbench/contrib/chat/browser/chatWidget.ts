@@ -985,6 +985,10 @@ export class ChatWidget extends Disposable implements IChatWidget {
 	}
 
 	private async _acceptInput(query: { query: string } | { prefix: string } | undefined, options?: IChatAcceptInputOptions): Promise<IChatResponseModel | undefined> {
+		if (this.viewModel?.requestInProgress) {
+			return;
+		}
+
 		if (this.viewModel) {
 			this._onDidAcceptInput.fire();
 			if (!this.viewOptions.autoScroll) {
@@ -1006,7 +1010,7 @@ export class ChatWidget extends Disposable implements IChatWidget {
 				}
 			}
 
-			let attachedContext = this.inputPart.getAttachedAndImplicitContext();
+			let attachedContext = this.inputPart.getAttachedAndImplicitContext(this.viewModel.sessionId);
 			let workingSet: URI[] | undefined;
 			if (this.location === ChatAgentLocation.EditingSession) {
 				const currentEditingSession = this.chatEditingService.currentEditingSessionObs.get();

@@ -9,14 +9,11 @@ import { language } from '../../../../base/common/platform.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { MarkdownString } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { localize, localize2 } from '../../../../nls.js';
-import { Categories } from '../../../../platform/action/common/actionCommonCategories.js';
+import { localize } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { createDecorator, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import product from '../../../../platform/product/common/product.js';
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../services/statusbar/browser/statusbar.js';
 import { ChatContextKeys } from '../common/chatContextKeys.js';
@@ -126,7 +123,7 @@ export class ChatQuotasService extends Disposable implements IChatQuotasService 
 					message = localize('chatAndCompletionsQuotaExceeded', "You've reached the limit of the Copilot Free plan. These limits will reset on {0}.", dateFormatter.format(that.quotas.quotaResetDate));
 				}
 
-				const upgradeToPro = localize('upgradeToPro', "Here's what you can expect when upgrading to Copilot Pro:\n- Unlimited code completions\n- Unlimited chat messages\n- 30-day free trial");
+				const upgradeToPro = localize('upgradeToPro', "Upgrade to Copilot Pro (your first 30 days are free) for:\n- Unlimited code completions\n- Unlimited chat messages\n- Access to additional models");
 
 				await dialogService.prompt({
 					type: 'none',
@@ -153,38 +150,7 @@ export class ChatQuotasService extends Disposable implements IChatQuotasService 
 			}
 		}
 
-		class SimulateCopilotQuotaExceeded extends Action2 {
-			constructor() {
-				super({
-					id: 'workbench.action.chat.simulateCopilotQuotaExceeded',
-					title: localize2('simulateCopilotQuotaExceeded', "Simulate Copilot Quota Exceeded"),
-					f1: true,
-					category: Categories.Developer
-				});
-			}
-
-			override async run(accessor: ServicesAccessor): Promise<void> {
-				const inputService = accessor.get(IQuickInputService);
-				const result = await inputService.pick([
-					{ label: 'Chat' },
-					{ label: 'Completions' }
-				], { canPickMany: true, placeHolder: 'Pick the quotas to exceed' });
-
-				if (result) {
-					const resultSet = new Set(result.map(r => r.label));
-					that.acceptQuotas({
-						chatQuotaExceeded: resultSet.has('Chat'),
-						completionsQuotaExceeded: resultSet.has('Completions'),
-						quotaResetDate: new Date()
-					});
-				}
-			}
-		}
-
 		registerAction2(ShowLimitReachedDialogAction);
-		if (product.quality !== 'stable') {
-			registerAction2(SimulateCopilotQuotaExceeded);
-		}
 	}
 
 	acceptQuotas(quotas: IChatQuotas): void {

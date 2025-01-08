@@ -2343,7 +2343,9 @@ export class ShellExecution implements vscode.ShellExecution {
 				throw illegalArgument('command');
 			}
 			this._command = arg0;
-			this._args = arg1 as (string | vscode.ShellQuotedString)[];
+			if (arg1) {
+				this._args = arg1;
+			}
 			this._options = arg2;
 		} else {
 			if (typeof arg0 !== 'string') {
@@ -2380,7 +2382,7 @@ export class ShellExecution implements vscode.ShellExecution {
 		return this._args;
 	}
 
-	set args(value: (string | vscode.ShellQuotedString)[]) {
+	set args(value: (string | vscode.ShellQuotedString)[] | undefined) {
 		this._args = value || [];
 	}
 
@@ -2948,6 +2950,7 @@ export enum DocumentPasteTriggerKind {
 export class DocumentDropOrPasteEditKind {
 	static Empty: DocumentDropOrPasteEditKind;
 	static Text: DocumentDropOrPasteEditKind;
+	static TextUpdateImports: DocumentDropOrPasteEditKind;
 
 	private static sep = '.';
 
@@ -2969,6 +2972,7 @@ export class DocumentDropOrPasteEditKind {
 }
 DocumentDropOrPasteEditKind.Empty = new DocumentDropOrPasteEditKind('');
 DocumentDropOrPasteEditKind.Text = new DocumentDropOrPasteEditKind('text');
+DocumentDropOrPasteEditKind.TextUpdateImports = DocumentDropOrPasteEditKind.Text.append('updateImports');
 
 export class DocumentPasteEdit {
 
