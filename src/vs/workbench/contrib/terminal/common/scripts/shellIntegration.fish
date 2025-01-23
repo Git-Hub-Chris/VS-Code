@@ -146,6 +146,16 @@ function __vsc_update_cwd --on-event fish_prompt
 	end
 end
 
+function __vsc_update_env --on-event fish_prompt
+	__vsc_esc EnvSingleStart
+	for line in (env)
+		set myVar (echo $line | awk -F= '{print $1}')
+		set myVal (echo $line | awk -F= '{print $2}')
+		__vsc_esc EnvSingleEntry $myVar (__vsc_escape_value "$myVal")
+	end
+	__vsc_esc EnvSingleEnd
+end
+
 # Sent at the start of the prompt.
 # Marks the beginning of the prompt (and, implicitly, a new line).
 function __vsc_fish_prompt_start
