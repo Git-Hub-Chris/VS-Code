@@ -16,6 +16,7 @@ import { USUAL_WORD_SEPARATORS } from '../core/wordHelper.js';
 import * as nls from '../../../nls.js';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
 import { IConfigurationPropertySchema } from '../../../platform/configuration/common/configurationRegistry.js';
+import product from '../../../platform/product/common/product.js';
 
 //#region typed options
 
@@ -1669,7 +1670,12 @@ export interface IEditorFindOptions {
 	 * @internal
 	 * Controls how the find widget search history should be stored
 	 */
-	history?: 'never' | 'workspace';
+	findHistory?: 'never' | 'workspace';
+	/**
+	 * @internal
+	 * Controls how the find widget search history should be stored
+	 */
+	replaceHistory?: 'never' | 'workspace';
 }
 
 /**
@@ -1687,7 +1693,8 @@ class EditorFind extends BaseEditorOption<EditorOption.find, IEditorFindOptions,
 			globalFindClipboard: false,
 			addExtraSpaceOnTop: true,
 			loop: true,
-			history: 'workspace',
+			findHistory: 'workspace',
+			replaceHistory: 'workspace',
 		};
 		super(
 			EditorOption.find, 'find', defaults,
@@ -1744,6 +1751,16 @@ class EditorFind extends BaseEditorOption<EditorOption.find, IEditorFindOptions,
 						nls.localize('editor.find.history.workspace', 'Store search history across the active workspace'),
 					],
 					description: nls.localize('find.history', "Controls how the find widget history should be stored")
+				},
+				'editor.replace.history': {
+					type: 'string',
+					enum: ['never', 'workspace'],
+					default: 'workspace',
+					enumDescriptions: [
+						nls.localize('editor.replace.history.never', 'Do not store history from the replace widget.'),
+						nls.localize('editor.replace.history.workspace', 'Store replace history across the active workspace'),
+					],
+					description: nls.localize('replace.history', "Controls how the replace widget history should be stored")
 				}
 			}
 		);
@@ -1765,7 +1782,8 @@ class EditorFind extends BaseEditorOption<EditorOption.find, IEditorFindOptions,
 			globalFindClipboard: boolean(input.globalFindClipboard, this.defaultValue.globalFindClipboard),
 			addExtraSpaceOnTop: boolean(input.addExtraSpaceOnTop, this.defaultValue.addExtraSpaceOnTop),
 			loop: boolean(input.loop, this.defaultValue.loop),
-			history: stringSet<'never' | 'workspace'>(input.history, this.defaultValue.history, ['never', 'workspace']),
+			findHistory: stringSet<'never' | 'workspace'>(input.findHistory, this.defaultValue.findHistory, ['never', 'workspace']),
+			replaceHistory: stringSet<'never' | 'workspace'>(input.replaceHistory, this.defaultValue.replaceHistory, ['never', 'workspace']),
 		};
 	}
 }
@@ -4197,10 +4215,8 @@ export interface IInlineSuggestOptions {
 			enabled?: boolean;
 			useMixedLinesDiff?: 'never' | 'whenPossible' | 'forStableInsertions' | 'afterJumpWhenPossible';
 			useInterleavedLinesDiff?: 'never' | 'always' | 'afterJump';
-			useWordInsertionView?: 'never' | 'whenPossible';
-			useWordReplacementView?: 'never' | 'whenPossible';
+			useCodeOverlay?: 'never' | 'whenPossible' | 'moveCodeWhenPossible';
 
-			onlyShowWhenCloseToCursor?: boolean;
 			useGutterIndicator?: boolean;
 		};
 	};
@@ -4233,10 +4249,8 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 					enabled: true,
 					useMixedLinesDiff: 'forStableInsertions',
 					useInterleavedLinesDiff: 'never',
-					useWordInsertionView: 'never',
-					useWordReplacementView: 'never',
-					onlyShowWhenCloseToCursor: true,
-					useGutterIndicator: false,
+					useGutterIndicator: true,
+					useCodeOverlay: 'whenPossible',
 				},
 			},
 		};
@@ -4283,31 +4297,20 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 				'editor.inlineSuggest.edits.experimental.useMixedLinesDiff': {
 					type: 'string',
 					default: defaults.edits.experimental.useMixedLinesDiff,
-					description: nls.localize('inlineSuggest.edits.experimental.useMixedLinesDiff', "Controls whether to enable experimental edits in inline suggestions."),
+					description: nls.localize('inlineSuggest.edits.experimental.useMixedLinesDiff', "Controls whether to enable experimental mixed lines diff in inline suggestions."),
 					enum: ['never', 'whenPossible', 'forStableInsertions', 'afterJumpWhenPossible'],
+				},
+				'editor.inlineSuggest.edits.experimental.useCodeOverlay': {
+					type: 'string',
+					default: defaults.edits.experimental.useCodeOverlay,
+					description: nls.localize('inlineSuggest.edits.experimental.useCodeOverlay', "Controls whether suggestions may be shown above the code."),
+					enum: ['never', 'whenPossible', 'moveCodeWhenPossible'],
 				},
 				'editor.inlineSuggest.edits.experimental.useInterleavedLinesDiff': {
 					type: 'string',
 					default: defaults.edits.experimental.useInterleavedLinesDiff,
 					description: nls.localize('inlineSuggest.edits.experimental.useInterleavedLinesDiff', "Controls whether to enable experimental interleaved lines diff in inline suggestions."),
 					enum: ['never', 'always', 'afterJump'],
-				},
-				'editor.inlineSuggest.edits.experimental.useWordInsertionView': {
-					type: 'string',
-					default: defaults.edits.experimental.useWordInsertionView,
-					description: nls.localize('inlineSuggest.edits.experimental.useWordInsertionView', "Controls whether to enable experimental word insertion view in inline suggestions."),
-					enum: ['never', 'whenPossible'],
-				},
-				'editor.inlineSuggest.edits.experimental.useWordReplacementView': {
-					type: 'string',
-					default: defaults.edits.experimental.useWordReplacementView,
-					description: nls.localize('inlineSuggest.edits.experimental.useWordReplacementView', "Controls whether to enable experimental word replacement view in inline suggestions."),
-					enum: ['never', 'whenPossible'],
-				},
-				'editor.inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor': {
-					type: 'boolean',
-					default: defaults.edits.experimental.onlyShowWhenCloseToCursor,
-					description: nls.localize('inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor', "Controls whether to only show inline suggestions when the cursor is close to the suggestion.")
 				},
 				'editor.inlineSuggest.edits.experimental.useGutterIndicator': {
 					type: 'boolean',
@@ -4335,10 +4338,8 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 				experimental: {
 					enabled: boolean(input.edits?.experimental?.enabled, this.defaultValue.edits.experimental.enabled),
 					useMixedLinesDiff: stringSet(input.edits?.experimental?.useMixedLinesDiff, this.defaultValue.edits.experimental.useMixedLinesDiff, ['never', 'whenPossible', 'forStableInsertions', 'afterJumpWhenPossible']),
+					useCodeOverlay: stringSet(input.edits?.experimental?.useCodeOverlay, this.defaultValue.edits.experimental.useCodeOverlay, ['never', 'whenPossible', 'moveCodeWhenPossible']),
 					useInterleavedLinesDiff: stringSet(input.edits?.experimental?.useInterleavedLinesDiff, this.defaultValue.edits.experimental.useInterleavedLinesDiff, ['never', 'always', 'afterJump']),
-					useWordInsertionView: stringSet(input.edits?.experimental?.useWordInsertionView, this.defaultValue.edits.experimental.useWordInsertionView, ['never', 'whenPossible']),
-					useWordReplacementView: stringSet(input.edits?.experimental?.useWordReplacementView, this.defaultValue.edits.experimental.useWordReplacementView, ['never', 'whenPossible']),
-					onlyShowWhenCloseToCursor: boolean(input.edits?.experimental?.onlyShowWhenCloseToCursor, this.defaultValue.edits.experimental.onlyShowWhenCloseToCursor),
 					useGutterIndicator: boolean(input.edits?.experimental?.useGutterIndicator, this.defaultValue.edits.experimental.useGutterIndicator),
 				},
 			},
@@ -5822,7 +5823,7 @@ export const EditorOptions = {
 	emptySelectionClipboard: register(new EditorEmptySelectionClipboard()),
 	dropIntoEditor: register(new EditorDropIntoEditor()),
 	experimentalEditContextEnabled: register(new EditorBooleanOption(
-		EditorOption.experimentalEditContextEnabled, 'experimentalEditContextEnabled', false,
+		EditorOption.experimentalEditContextEnabled, 'experimentalEditContextEnabled', product.quality !== 'stable',
 		{
 			description: nls.localize('experimentalEditContextEnabled', "Sets whether the new experimental edit context should be used instead of the text area."),
 			included: platform.isChrome || platform.isEdge || platform.isNative
@@ -5834,12 +5835,12 @@ export const EditorOptions = {
 		'off' as 'off' | 'on',
 		['off', 'on'] as const,
 		{
-			included: false, // Hide the setting from users while it's unstable
+			tags: ['experimental'],
 			enumDescriptions: [
 				nls.localize('experimentalGpuAcceleration.off', "Use regular DOM-based rendering."),
 				nls.localize('experimentalGpuAcceleration.on', "Use GPU acceleration."),
 			],
-			description: nls.localize('experimentalGpuAcceleration', "Controls whether to use the (very) experimental GPU acceleration to render the editor.")
+			description: nls.localize('experimentalGpuAcceleration', "Controls whether to use the experimental GPU acceleration to render the editor.")
 		}
 	)),
 	experimentalWhitespaceRendering: register(new EditorStringEnumOption(
