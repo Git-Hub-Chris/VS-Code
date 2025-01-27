@@ -1744,6 +1744,10 @@ declare namespace monaco.editor {
 		 */
 		glyphMargin?: IModelDecorationGlyphMarginOptions | null;
 		/**
+		 * If set, the decoration will override the line height of the lines it spans.
+		 */
+		lineHeight?: number | null;
+		/**
 		 * If set, the decoration will be rendered in the lines decorations with this CSS class name.
 		 */
 		linesDecorationsClassName?: string | null;
@@ -1997,6 +2001,20 @@ declare namespace monaco.editor {
 		 * A unique identifier associated with this model.
 		 */
 		readonly id: string;
+		/**
+		 * If true, the corresponding line is affected by special font info
+		 */
+		affectedBySpecialFontInfo(lineNumber: number): boolean;
+		/**
+		 * Get special font infos on line number
+		 */
+		getSpecialFontInfos(lineNumber: number): {
+			range: Range;
+			fontFamily: string | undefined;
+			fontSize: number | undefined;
+			fontWeight: string | undefined;
+			fontStyle: string | undefined;
+		}[];
 		/**
 		 * Get the resolved options for this model.
 		 */
@@ -2615,6 +2633,10 @@ declare namespace monaco.editor {
 		 * Get a unique id for this editor instance.
 		 */
 		getId(): string;
+		/**
+		* Get the id number for this editor instance.
+		*/
+		getIdNumber(): number;
 		/**
 		 * Get the editor type. Please see `EditorType`.
 		 * This is to avoid an instanceof check
@@ -6086,6 +6108,18 @@ declare namespace monaco.editor {
 		 * Get the vertical position (top offset) for the position w.r.t. to the first line.
 		 */
 		getTopForPosition(lineNumber: number, column: number): number;
+		/**
+		 * Get the line height for the line number.
+		 */
+		getLineHeightForModelLineNumber(lineNumber: number): number;
+		/**
+		 * Get special font info at position
+		 */
+		getSpecialFontInfoForPosition(pos: Position): {
+			fontFamily?: string;
+			fontWeight?: string;
+			fontSize?: number;
+		} | null;
 		/**
 		 * Write the screen reader content to be the current selection
 		 */

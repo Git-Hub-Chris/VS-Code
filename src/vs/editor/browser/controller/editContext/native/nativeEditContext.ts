@@ -420,7 +420,6 @@ export class NativeEditContext extends AbstractEditContext {
 			return;
 		}
 		const options = this._context.configuration.options;
-		const lineHeight = options.get(EditorOption.lineHeight);
 		const contentLeft = options.get(EditorOption.layoutInfo).contentLeft;
 		const parentBounds = this._parent.getBoundingClientRect();
 		const modelStartPosition = this._primarySelection.getStartPosition();
@@ -428,7 +427,10 @@ export class NativeEditContext extends AbstractEditContext {
 		const verticalOffsetStart = this._context.viewLayout.getVerticalOffsetForLineNumber(viewStartPosition.lineNumber);
 
 		const top = parentBounds.top + verticalOffsetStart - this._scrollTop;
-		const height = (this._primarySelection.endLineNumber - this._primarySelection.startLineNumber + 1) * lineHeight;
+		let height = 0;
+		for (let line = this._primarySelection.startLineNumber; line <= this._primarySelection.endLineNumber; line++) {
+			height += this._context.viewLayout.getLineHeightForModelLineNumber(line);
+		}
 		let left = parentBounds.left + contentLeft - this._scrollLeft;
 		let width: number;
 
@@ -453,7 +455,6 @@ export class NativeEditContext extends AbstractEditContext {
 		}
 		const options = this._context.configuration.options;
 		const typicalHalfWidthCharacterWidth = options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
-		const lineHeight = options.get(EditorOption.lineHeight);
 		const contentLeft = options.get(EditorOption.layoutInfo).contentLeft;
 		const parentBounds = this._parent.getBoundingClientRect();
 
@@ -467,7 +468,8 @@ export class NativeEditContext extends AbstractEditContext {
 			const characterModelRange = Range.fromPositions(characterStartPosition, characterEndPosition);
 			const characterViewRange = this._context.viewModel.coordinatesConverter.convertModelRangeToViewRange(characterModelRange);
 			const characterLinesVisibleRanges = this._visibleRangeProvider.linesVisibleRangesForRange(characterViewRange, true) ?? [];
-			const characterVerticalOffset = this._context.viewLayout.getVerticalOffsetForLineNumber(characterViewRange.startLineNumber);
+			const lineNumber = characterViewRange.startLineNumber;
+			const characterVerticalOffset = this._context.viewLayout.getVerticalOffsetForLineNumber(lineNumber);
 			const top = parentBounds.top + characterVerticalOffset - this._scrollTop;
 
 			let left = 0;
@@ -479,7 +481,8 @@ export class NativeEditContext extends AbstractEditContext {
 					break;
 				}
 			}
-			characterBounds.push(new DOMRect(parentBounds.left + contentLeft + left - this._scrollLeft, top, width, lineHeight));
+			const height = this._context.viewLayout.getLineHeightForModelLineNumber(lineNumber);
+			characterBounds.push(new DOMRect(parentBounds.left + contentLeft + left - this._scrollLeft, top, width, height));
 		}
 		this._editContext.updateCharacterBounds(e.rangeStart, characterBounds);
 	}

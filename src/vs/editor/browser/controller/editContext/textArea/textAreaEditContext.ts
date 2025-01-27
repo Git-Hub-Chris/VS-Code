@@ -16,7 +16,7 @@ import { PartFingerprint, PartFingerprints } from '../../../view/viewPart.js';
 import { LineNumbersOverlay } from '../../../viewParts/lineNumbers/lineNumbers.js';
 import { Margin } from '../../../viewParts/margin/margin.js';
 import { RenderLineNumbersType, EditorOption, IComputedEditorOptions, EditorOptions } from '../../../../common/config/editorOptions.js';
-import { FontInfo } from '../../../../common/config/fontInfo.js';
+import { BareFontInfo, FontInfo } from '../../../../common/config/fontInfo.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -40,6 +40,8 @@ import { ariaLabelForScreenReaderContent, ISimpleModel, newlinecount, PagedScree
 import { ClipboardDataToCopy, getDataToCopy } from '../clipboardUtils.js';
 import { _debugComposition, ITypeData, TextAreaState } from './textAreaEditContextState.js';
 import { getMapForWordSeparators, WordCharacterClass } from '../../../../common/core/wordCharacterClassifier.js';
+import { getActiveWindow } from '../../../../../base/browser/dom.js';
+import { PixelRatio } from '../../../../../base/browser/pixelRatio.js';
 
 export interface IVisibleRangeProvider {
 	visibleRangeForPosition(position: Position): HorizontalPosition | null;
@@ -125,7 +127,6 @@ export class TextAreaEditContext extends AbstractEditContext {
 	private _contentWidth: number;
 	private _contentHeight: number;
 	private _fontInfo: FontInfo;
-	private _lineHeight: number;
 	private _emptySelectionClipboard: boolean;
 	private _copyWithSyntaxHighlighting: boolean;
 
@@ -169,7 +170,6 @@ export class TextAreaEditContext extends AbstractEditContext {
 		this._contentWidth = layoutInfo.contentWidth;
 		this._contentHeight = layoutInfo.height;
 		this._fontInfo = options.get(EditorOption.fontInfo);
-		this._lineHeight = options.get(EditorOption.lineHeight);
 		this._emptySelectionClipboard = options.get(EditorOption.emptySelectionClipboard);
 		this._copyWithSyntaxHighlighting = options.get(EditorOption.copyWithSyntaxHighlighting);
 
@@ -591,7 +591,6 @@ export class TextAreaEditContext extends AbstractEditContext {
 		this._contentWidth = layoutInfo.contentWidth;
 		this._contentHeight = layoutInfo.height;
 		this._fontInfo = options.get(EditorOption.fontInfo);
-		this._lineHeight = options.get(EditorOption.lineHeight);
 		this._emptySelectionClipboard = options.get(EditorOption.emptySelectionClipboard);
 		this._copyWithSyntaxHighlighting = options.get(EditorOption.copyWithSyntaxHighlighting);
 		this.textArea.setAttribute('wrap', this._textAreaWrapping && !this._visibleTextArea ? 'on' : 'off');
@@ -745,7 +744,9 @@ export class TextAreaEditContext extends AbstractEditContext {
 				}
 
 				// Try to render the textarea with the color/font style to match the text under it
-				const viewLineData = this._context.viewModel.getViewLineData(startPosition.lineNumber);
+				const lineNumber = startPosition.lineNumber;
+				const lineHeight = this._context.viewLayout.getLineHeightForModelLineNumber(lineNumber);
+				const viewLineData = this._context.viewModel.getViewLineData(lineNumber);
 				const startTokenIndex = viewLineData.tokens.findTokenIndexAtOffset(startPosition.column - 1);
 				const endTokenIndex = viewLineData.tokens.findTokenIndexAtOffset(endPosition.column - 1);
 				const textareaSpansSingleToken = (startTokenIndex === endTokenIndex);
@@ -753,7 +754,7 @@ export class TextAreaEditContext extends AbstractEditContext {
 					(textareaSpansSingleToken ? viewLineData.tokens.getPresentation(startTokenIndex) : null)
 				);
 
-				this.textArea.domNode.scrollTop = lineCount * this._lineHeight;
+				this.textArea.domNode.scrollTop = lineCount * lineHeight;
 				this.textArea.domNode.scrollLeft = scrollLeft;
 
 				this._doRender({
@@ -761,7 +762,7 @@ export class TextAreaEditContext extends AbstractEditContext {
 					top: top,
 					left: left,
 					width: width,
-					height: this._lineHeight,
+					height: lineHeight,
 					useCover: false,
 					color: (TokenizationRegistry.getColorMap() || [])[presentation.foreground],
 					italic: presentation.italic,
@@ -798,19 +799,21 @@ export class TextAreaEditContext extends AbstractEditContext {
 		if (platform.isMacintosh || this._accessibilitySupport === AccessibilitySupport.Enabled) {
 			// For the popup emoji input, we will make the text area as high as the line height
 			// We will also make the fontSize and lineHeight the correct dimensions to help with the placement of these pickers
+			const lineNumber = this._primaryCursorPosition.lineNumber;
+			const lineHeight = this._context.viewLayout.getLineHeightForModelLineNumber(lineNumber);
 			this._doRender({
 				lastRenderPosition: this._primaryCursorPosition,
 				top,
 				left: this._textAreaWrapping ? this._contentLeft : left,
 				width: this._textAreaWidth,
-				height: this._lineHeight,
+				height: lineHeight,
 				useCover: false
 			});
 			// In case the textarea contains a word, we're going to try to align the textarea's cursor
 			// with our cursor by scrolling the textarea as much as possible
 			this.textArea.domNode.scrollLeft = this._primaryCursorVisibleRange.left;
 			const lineCount = this._textAreaInput.textAreaState.newlineCountBeforeSelection ?? newlinecount(this.textArea.domNode.value.substring(0, this.textArea.domNode.selectionStart));
-			this.textArea.domNode.scrollTop = lineCount * this._lineHeight;
+			this.textArea.domNode.scrollTop = lineCount * lineHeight;
 			return;
 		}
 
@@ -843,7 +846,28 @@ export class TextAreaEditContext extends AbstractEditContext {
 		const ta = this.textArea;
 		const tac = this.textAreaCover;
 
-		applyFontInfo(ta, this._fontInfo);
+		let fontInfo: BareFontInfo = this._fontInfo;
+
+		if (this._primaryCursorPosition) {
+			const specialFontInfo = this._context.viewModel.getSpecialFontInfoForPosition(this._primaryCursorPosition);
+			if (specialFontInfo && (
+				specialFontInfo.fontFamily !== this._fontInfo.fontFamily
+				|| specialFontInfo.fontWeight !== this._fontInfo.fontWeight
+				|| specialFontInfo.fontSize !== this._fontInfo.fontSize
+			)) {
+				const targetWindow = getActiveWindow();
+				const fontSize = specialFontInfo.fontSize ? (renderData.height > specialFontInfo.fontSize ? specialFontInfo.fontSize : renderData.height) : undefined;
+				fontInfo = BareFontInfo.createFromRawSettings({
+					fontFamily: specialFontInfo.fontFamily,
+					fontWeight: specialFontInfo.fontWeight,
+					fontSize,
+					lineHeight: renderData.height
+				}, PixelRatio.getInstance(targetWindow).value);
+			}
+		}
+
+		applyFontInfo(ta, fontInfo);
+		ta.setLineHeight(renderData.height);
 		ta.setTop(renderData.top);
 		ta.setLeft(renderData.left);
 		ta.setWidth(renderData.width);
@@ -891,6 +915,7 @@ interface IRenderData {
 	strikethrough?: boolean;
 }
 
+// potential error with font info
 function measureText(targetDocument: Document, text: string, fontInfo: FontInfo, tabSize: number): number {
 	if (text.length === 0) {
 		return 0;

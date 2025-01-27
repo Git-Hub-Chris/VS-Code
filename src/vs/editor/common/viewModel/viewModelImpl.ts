@@ -116,7 +116,7 @@ export class ViewModel extends Disposable implements IViewModel {
 
 		this._cursor = this._register(new CursorsController(model, this, this.coordinatesConverter, this.cursorConfig));
 
-		this.viewLayout = this._register(new ViewLayout(this._configuration, this.getLineCount(), scheduleAtNextAnimationFrame));
+		this.viewLayout = this._register(new ViewLayout(this._configuration, this.getLineCount(), scheduleAtNextAnimationFrame, this.coordinatesConverter, (lineNumber: number) => this.model.getLineMaxColumn(lineNumber)));
 
 		this._register(this.viewLayout.onDidScroll((e) => {
 			if (e.scrollTopChanged) {
@@ -413,6 +413,23 @@ export class ViewModel extends Disposable implements IViewModel {
 			}
 
 			this._handleVisibleLinesChanged();
+		}));
+
+		this._register(this.model.onDidChangeSpecialLineHeight((e) => {
+			e.changes.forEach((change) => {
+				if (change.ownerId !== this._editorId && change.ownerId !== 0) {
+					return;
+				}
+				const modelLineNumber = change.lineNumber;
+				const lineHeight = change.lineHeight;
+				if (lineHeight !== null) {
+					console.log('addSpecialLineHeight', modelLineNumber, lineHeight);
+					this.viewLayout.addSpecialLineHeight(modelLineNumber, lineHeight);
+				} else {
+					console.log('removeSpecialLineHeight', modelLineNumber);
+					this.viewLayout.removeSpecialLineHeight(modelLineNumber);
+				}
+			});
 		}));
 
 		this._register(this.model.onDidChangeTokens((e) => {
@@ -715,6 +732,10 @@ export class ViewModel extends Disposable implements IViewModel {
 		return this._decorations.getDecorationsViewportData(visibleRange).decorations;
 	}
 
+	public getSpecialFontInfoForPosition(position: Position): { fontFamily?: string; fontWeight?: string; fontSize?: number } | null {
+		return this._decorations.getSpecialFontInfoForPosition(position);
+	}
+
 	public getInjectedTextAt(viewPosition: Position): InjectedText | null {
 		return this._lines.getInjectedTextAt(viewPosition);
 	}
@@ -735,6 +756,8 @@ export class ViewModel extends Disposable implements IViewModel {
 		const mightContainNonBasicASCII = this.model.mightContainNonBasicASCII();
 		const tabSize = this.getTabSize();
 		const lineData = this._lines.getViewLineData(lineNumber);
+		const modelPosition = this.coordinatesConverter.convertViewPositionToModelPosition(new Position(lineNumber, 1));
+		const affectedBySpecialFontInfo = this.model.affectedBySpecialFontInfo(modelPosition.lineNumber);
 
 		if (lineData.inlineDecorations) {
 			inlineDecorations = [
@@ -755,7 +778,8 @@ export class ViewModel extends Disposable implements IViewModel {
 			lineData.tokens,
 			inlineDecorations,
 			tabSize,
-			lineData.startVisibleColumn
+			lineData.startVisibleColumn,
+			affectedBySpecialFontInfo
 		);
 	}
 
