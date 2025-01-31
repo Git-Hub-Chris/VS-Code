@@ -37,8 +37,11 @@ abstract class NavigateAction extends Action2 {
 				primary: next
 					? KeyMod.Alt | KeyCode.F5
 					: KeyMod.Alt | KeyMod.Shift | KeyCode.F5,
-				weight: KeybindingWeight.EditorContrib,
-				when: ContextKeyExpr.and(ContextKeyExpr.or(ctxHasEditorModification, ctxNotebookHasEditorModification), EditorContextKeys.focus),
+				weight: KeybindingWeight.WorkbenchContrib,
+				when: ContextKeyExpr.and(
+					ContextKeyExpr.or(ctxHasEditorModification, ctxNotebookHasEditorModification),
+					EditorContextKeys.focus
+				),
 			},
 			f1: true,
 			menu: {
@@ -327,17 +330,16 @@ export function registerChatEditorActions() {
 	registerAction2(RejectHunkAction);
 	registerAction2(OpenDiffAction);
 
+	MenuRegistry.appendMenuItem(MenuId.ChatEditingEditorContent, {
+		command: {
+			id: navigationBearingFakeActionId,
+			title: localize('label', "Navigation Status"),
+			precondition: ContextKeyExpr.false(),
+		},
+		group: 'navigate',
+		order: -1,
+		when: ctxReviewModeEnabled,
+	});
 }
 
 export const navigationBearingFakeActionId = 'chatEditor.navigation.bearings';
-
-MenuRegistry.appendMenuItem(MenuId.ChatEditingEditorContent, {
-	command: {
-		id: navigationBearingFakeActionId,
-		title: localize('label', "Navigation Status"),
-		precondition: ContextKeyExpr.false(),
-	},
-	group: 'navigate',
-	order: -1,
-	when: ctxReviewModeEnabled,
-});

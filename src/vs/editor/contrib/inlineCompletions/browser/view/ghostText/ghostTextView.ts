@@ -39,6 +39,10 @@ export class GhostTextView extends Disposable {
 	constructor(
 		private readonly _editor: ICodeEditor,
 		private readonly _model: IGhostTextWidgetModel,
+		private readonly _options: IObservable<{
+			extraClasses?: string[];
+			syntaxHighlightingEnabled: boolean;
+		}>,
 		@ILanguageService private readonly _languageService: ILanguageService,
 	) {
 		super();
@@ -47,7 +51,16 @@ export class GhostTextView extends Disposable {
 		this._register(this._editorObs.setDecorations(this.decorations));
 	}
 
-	private readonly _useSyntaxHighlighting = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => v.syntaxHighlightingEnabled);
+	private readonly _useSyntaxHighlighting = this._options.map(o => o.syntaxHighlightingEnabled);
+
+	private readonly _extraClassNames = derived(this, reader => {
+		const extraClasses = [...this._options.read(reader).extraClasses ?? []];
+		if (this._useSyntaxHighlighting.read(reader)) {
+			extraClasses.push('syntax-highlighted');
+		}
+		const extraClassNames = extraClasses.map(c => ` ${c}`).join('');
+		return extraClassNames;
+	});
 
 	private readonly uiState = derived(this, reader => {
 		if (this._isDisposed.read(reader)) { return undefined; }
@@ -59,8 +72,8 @@ export class GhostTextView extends Disposable {
 		const replacedRange = ghostText instanceof GhostTextReplacement ? ghostText.columnRange : undefined;
 
 		const syntaxHighlightingEnabled = this._useSyntaxHighlighting.read(reader);
-		const extraClassName = syntaxHighlightingEnabled ? ' syntax-highlighted' : '';
-		const { inlineTexts, additionalLines, hiddenRange } = computeGhostTextViewData(ghostText, textModel, 'ghost-text' + extraClassName);
+		const extraClassNames = this._extraClassNames.read(reader);
+		const { inlineTexts, additionalLines, hiddenRange } = computeGhostTextViewData(ghostText, textModel, 'ghost-text' + extraClassNames);
 
 		const currentLine = textModel.getLineContent(ghostText.lineNumber);
 		const edit = new OffsetEdit(inlineTexts.map(t => SingleOffsetEdit.insert(t.column - 1, t.text)));
@@ -91,12 +104,12 @@ export class GhostTextView extends Disposable {
 
 		const decorations: IModelDeltaDecoration[] = [];
 
-		const extraClassName = uiState.syntaxHighlightingEnabled ? ' syntax-highlighted' : '';
+		const extraClassNames = this._extraClassNames.read(reader);
 
 		if (uiState.replacedRange) {
 			decorations.push({
 				range: uiState.replacedRange.toRange(uiState.lineNumber),
-				options: { inlineClassName: 'inline-completion-text-to-replace' + extraClassName, description: 'GhostTextReplacement' }
+				options: { inlineClassName: 'inline-completion-text-to-replace' + extraClassNames, description: 'GhostTextReplacement' }
 			});
 		}
 
@@ -115,7 +128,7 @@ export class GhostTextView extends Disposable {
 					after: {
 						content: p.text,
 						tokens: p.tokens,
-						inlineClassName: p.preview ? 'ghost-text-decoration-preview' : 'ghost-text-decoration' + extraClassName,
+						inlineClassName: p.preview ? 'ghost-text-decoration-preview' : 'ghost-text-decoration' + extraClassNames,
 						cursorStops: InjectedTextCursorStops.Left
 					},
 					showIfCollapsed: true,
@@ -141,6 +154,11 @@ export class GhostTextView extends Disposable {
 			})
 		)
 	);
+
+	public readonly height = derived(this, reader => {
+		const lineHeight = this._editorObs.getOption(EditorOption.lineHeight).read(reader);
+		return lineHeight + (this.additionalLinesWidget.viewZoneHeight.read(reader) ?? 0);
+	});
 
 	public ownsViewZone(viewZoneId: string): boolean {
 		return this.additionalLinesWidget.viewZoneId === viewZoneId;
@@ -218,6 +236,9 @@ export class AdditionalLinesWidget extends Disposable {
 	private _viewZoneInfo: { viewZoneId: string; heightInLines: number; lineNumber: number } | undefined;
 	public get viewZoneId(): string | undefined { return this._viewZoneInfo?.viewZoneId; }
 
+	private _viewZoneHeight = observableValue<undefined | number>('viewZoneHeight', undefined);
+	public get viewZoneHeight(): IObservable<number | undefined> { return this._viewZoneHeight; }
+
 	private readonly editorOptionsChanged = observableSignalFromEvent('editorOptionChanged', Event.filter(
 		this.editor.onDidChangeConfiguration,
 		e => e.hasChanged(EditorOption.disableMonospaceOptimizations)
@@ -290,7 +311,10 @@ export class AdditionalLinesWidget extends Disposable {
 			afterLineNumber: afterLineNumber,
 			heightInLines: heightInLines,
 			domNode,
-			afterColumnAffinity: PositionAffinity.Right
+			afterColumnAffinity: PositionAffinity.Right,
+			onComputedHeight: (height: number) => {
+				this._viewZoneHeight.set(height, undefined); // TODO: can a transaction be used to avoid flickering?
+			}
 		});
 
 		this.keepCursorStable(afterLineNumber, heightInLines);
@@ -305,6 +329,7 @@ export class AdditionalLinesWidget extends Disposable {
 			this.keepCursorStable(this._viewZoneInfo.lineNumber, -this._viewZoneInfo.heightInLines);
 
 			this._viewZoneInfo = undefined;
+			this._viewZoneHeight.set(undefined, undefined);
 		}
 	}
 
