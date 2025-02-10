@@ -415,6 +415,26 @@ export class ViewModel extends Disposable implements IViewModel {
 			this._handleVisibleLinesChanged();
 		}));
 
+		this._register(this.model.onDidChangeSpecialLineHeight((e) => {
+			e.changes.forEach((change) => {
+				if (change.ownerId !== this._editorId && change.ownerId !== 0) {
+					return;
+				}
+				const lineNumber = change.lineNumber;
+				const lineHeight = change.lineHeight;
+				const viewRange = this.coordinatesConverter.convertModelRangeToViewRange(new Range(lineNumber, 1, lineNumber, this.model.getLineMaxColumn(lineNumber)));
+				if (lineHeight !== null) {
+					for (let i = viewRange.startLineNumber; i <= viewRange.endLineNumber; i++) {
+						this.viewLayout.addSpecialLineHeight(lineNumber, lineHeight);
+					}
+				} else {
+					for (let i = viewRange.startLineNumber; i <= viewRange.endLineNumber; i++) {
+						this.viewLayout.removeSpecialLineHeight(lineNumber);
+					}
+				}
+			});
+		}));
+
 		this._register(this.model.onDidChangeTokens((e) => {
 			const viewRanges: { fromLineNumber: number; toLineNumber: number }[] = [];
 			for (let j = 0, lenJ = e.ranges.length; j < lenJ; j++) {

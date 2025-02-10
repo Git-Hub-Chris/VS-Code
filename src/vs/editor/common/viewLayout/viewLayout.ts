@@ -202,6 +202,14 @@ export class ViewLayout extends Disposable implements IViewLayout {
 		this._updateHeight();
 	}
 
+	public addSpecialLineHeight(lineNumber: number, height: number): void {
+		this._linesLayout.addSpecialLineHeight(lineNumber, height);
+	}
+
+	public removeSpecialLineHeight(lineNumber: number): void {
+		this._linesLayout.removeSpecialLineHeight(lineNumber);
+	}
+
 	private _configureSmoothScrollDuration(): void {
 		this._scrollable.setSmoothScrollDuration(this._configuration.options.get(EditorOption.smoothScrolling) ? SMOOTH_SCROLLING_TIME : 0);
 	}
@@ -374,6 +382,8 @@ export class ViewLayout extends Disposable implements IViewLayout {
 
 	// ----
 	public changeWhitespace(callback: (accessor: IWhitespaceChangeAccessor) => void): boolean {
+		// We call the changeWhitespace method
+		// If there was a change, then call onHeightMaybeChanged
 		const hadAChange = this._linesLayout.changeWhitespace(callback);
 		if (hadAChange) {
 			this.onHeightMaybeChanged();
@@ -385,6 +395,9 @@ export class ViewLayout extends Disposable implements IViewLayout {
 	}
 	public getVerticalOffsetAfterLineNumber(lineNumber: number, includeViewZones: boolean = false): number {
 		return this._linesLayout.getVerticalOffsetAfterLineNumber(lineNumber, includeViewZones);
+	}
+	public getLineHeightForLineNumber(lineNumber: number): number {
+		return this._linesLayout.getLineHeightForLineNumber(lineNumber);
 	}
 	public isAfterLines(verticalOffset: number): boolean {
 		return this._linesLayout.isAfterLines(verticalOffset);
