@@ -12,7 +12,7 @@ import { Event } from '../../base/common/event.js';
 import { IURITransformer, transformOutgoingURIs } from '../../base/common/uriIpc.js';
 import { IServerChannel } from '../../base/parts/ipc/common/ipc.js';
 import { ContextKeyDefinedExpr, ContextKeyEqualsExpr, ContextKeyExpr, ContextKeyExpression, ContextKeyGreaterEqualsExpr, ContextKeyGreaterExpr, ContextKeyInExpr, ContextKeyNotEqualsExpr, ContextKeyNotExpr, ContextKeyNotInExpr, ContextKeyRegexExpr, ContextKeySmallerEqualsExpr, ContextKeySmallerExpr, IContextKeyExprMapper } from '../../platform/contextkey/common/contextkey.js';
-import { IExtensionGalleryService, InstallOptions } from '../../platform/extensionManagement/common/extensionManagement.js';
+import { IExtensionGalleryService, IExtensionManagementService, InstallExtensionsResult, InstallOptions } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { ExtensionManagementCLI } from '../../platform/extensionManagement/common/extensionManagementCLI.js';
 import { IExtensionsScannerService, toExtensionDescription } from '../../platform/extensionManagement/common/extensionsScannerService.js';
 import { ExtensionType, IExtensionDescription } from '../../platform/extensions/common/extensions.js';
@@ -23,13 +23,14 @@ import { dedupExtensions } from '../../workbench/services/extensions/common/exte
 import { Schemas } from '../../base/common/network.js';
 import { IRemoteExtensionsScannerService } from '../../platform/remote/common/remoteExtensionsScanner.js';
 import { ILanguagePackService } from '../../platform/languagePacks/common/languagePacks.js';
+import { areSameExtensions } from '../../platform/extensionManagement/common/extensionManagementUtil.js';
 
 export class RemoteExtensionsScannerService implements IRemoteExtensionsScannerService {
 
 	readonly _serviceBrand: undefined;
 
-	private readonly _whenBuiltinExtensionsReady = Promise.resolve();
-	private readonly _whenExtensionsReady = Promise.resolve();
+	private readonly _whenBuiltinExtensionsReady = Promise.resolve<InstallExtensionsResult>({ failed: [] });
+	private readonly _whenExtensionsReady = Promise.resolve<InstallExtensionsResult>({ failed: [] });
 
 	constructor(
 		private readonly _extensionManagementCLI: ExtensionManagementCLI,
@@ -38,7 +39,8 @@ export class RemoteExtensionsScannerService implements IRemoteExtensionsScannerS
 		private readonly _extensionsScannerService: IExtensionsScannerService,
 		private readonly _logService: ILogService,
 		private readonly _extensionGalleryService: IExtensionGalleryService,
-		private readonly _languagePackService: ILanguagePackService
+		private readonly _languagePackService: ILanguagePackService,
+		private readonly _extensionManagementService: IExtensionManagementService,
 	) {
 		const builtinExtensionsToInstall = environmentService.args['install-builtin-extension'];
 		if (builtinExtensionsToInstall) {
@@ -49,24 +51,46 @@ export class RemoteExtensionsScannerService implements IRemoteExtensionsScannerS
 				.then(() => {
 					performance.mark('code/server/didInstallBuiltinExtensions');
 					_logService.trace('Finished installing builtin extensions');
+					return { failed: [] };
 				}, error => {
 					_logService.error(error);
+					return { failed: [] };
 				});
 		}
 
 		const extensionsToInstall = environmentService.args['install-extension'];
 		if (extensionsToInstall) {
 			_logService.trace('Installing extensions passed via args...');
+			const installOptions: InstallOptions = {
+				isMachineScoped: !!environmentService.args['do-not-sync'],
+				installPreReleaseVersion: !!environmentService.args['pre-release'],
+				isApplicationScoped: true // extensions installed during server startup are available to all profiles
+			};
 			this._whenExtensionsReady = this._whenBuiltinExtensionsReady
-				.then(() => _extensionManagementCLI.installExtensions(this._asExtensionIdOrVSIX(extensionsToInstall), [], {
-					isMachineScoped: !!environmentService.args['do-not-sync'],
-					installPreReleaseVersion: !!environmentService.args['pre-release'],
-					isApplicationScoped: true // extensions installed during server startup are available to all profiles
-				}, !!environmentService.args['force']))
-				.then(() => {
+				.then(() => _extensionManagementCLI.installExtensions(this._asExtensionIdOrVSIX(extensionsToInstall), [], installOptions, !!environmentService.args['force']))
+				.then(async () => {
 					_logService.trace('Finished installing extensions');
-				}, error => {
+					return { failed: [] };
+				}, async error => {
 					_logService.error(error);
+
+					const failed: {
+						extension: string | URI;
+						installOptions: InstallOptions;
+					}[] = [];
+					const alreadyInstalled = await this._extensionManagementService.getInstalled(ExtensionType.User);
+					for (const ext of this._asExtensionIdOrVSIX(extensionsToInstall)) {
+						if (typeof ext === 'string') {
+							if (!alreadyInstalled.some(e => areSameExtensions(e.identifier, { id: ext }))) {
+								failed.push({ extension: ext, installOptions });
+							}
+							// NOTE: Collect VSIX URIs here
+						}
+					}
+					if (failed.length) {
+						_logService.trace(`Reporting the following extensions as failed to install: ${failed.map(f => f.extension).join(', ')}`);
+					}
+					return { failed };
 				});
 		}
 	}
@@ -75,7 +99,7 @@ export class RemoteExtensionsScannerService implements IRemoteExtensionsScannerS
 		return inputs.map(input => /\.vsix$/i.test(input) ? URI.file(isAbsolute(input) ? input : join(cwd(), input)) : input);
 	}
 
-	whenExtensionsReady(): Promise<void> {
+	whenExtensionsReady(): Promise<InstallExtensionsResult> {
 		return this._whenExtensionsReady;
 	}
 
@@ -308,7 +332,17 @@ export class RemoteExtensionsScannerChannel implements IServerChannel {
 	async call(context: any, command: string, args?: any): Promise<any> {
 		const uriTransformer = this.getUriTransformer(context);
 		switch (command) {
-			case 'whenExtensionsReady': return this.service.whenExtensionsReady();
+			case 'whenExtensionsReady': {
+				const result = await this.service.whenExtensionsReady();
+				return {
+					failed: result.failed.map(f => {
+						return {
+							extension: typeof f.extension === 'string' ? f.extension : uriTransformer.transformOutgoing(f.extension),
+							installOptions: f.installOptions
+						};
+					})
+				};
+			}
 			case 'scanExtensions': {
 				const language = args[0];
 				const profileLocation = args[1] ? URI.revive(uriTransformer.transformIncoming(args[1])) : undefined;
