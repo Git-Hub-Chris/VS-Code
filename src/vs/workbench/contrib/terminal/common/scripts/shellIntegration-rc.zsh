@@ -32,6 +32,17 @@ if [[ "$VSCODE_INJECTION" == "1" ]]; then
 	fi
 fi
 
+zsh_version=${ZSH_VERSION}
+use_associative_array=0
+vsc_env_keys=()
+vsc_env_values=()
+
+# Associative array are only available in zsh 4.3 or later
+if (( zsh_version >= 4.3 )); then
+	use_associative_array=1
+	typeset -A vsc_aa_env
+fi
+
 # Apply EnvironmentVariableCollections if needed
 if [ -n "${VSCODE_ENV_REPLACE:-}" ]; then
 	IFS=':' read -rA ADDR <<< "$VSCODE_ENV_REPLACE"
@@ -89,7 +100,7 @@ __vsc_escape_value() {
 		out+="$token"
 	done
 
-	builtin print -r "$out"
+	builtin print -r -- "$out"
 }
 
 __vsc_in_command_execution="1"
@@ -109,6 +120,123 @@ __vsc_prompt_end() {
 
 __vsc_update_cwd() {
 	builtin printf '\e]633;P;Cwd=%s\a' "$(__vsc_escape_value "${PWD}")"
+}
+
+__update_env_cache_aa() {
+	local key="$1"
+	local value="$2"
+	if [ $use_associative_array -eq 1 ]; then
+		if [[ "${vsc_aa_env["$key"]}" != "$value" ]]; then
+			vsc_aa_env["$key"]="$value"
+			builtin printf '\e]633;EnvSingleEntry;%s;%s;%s\a' "$key" "$(__vsc_escape_value "$value")" "$__vsc_nonce"
+		fi
+	fi
+}
+
+__track_missing_env_vars_aa() {
+	if [ $use_associative_array -eq 1 ]; then
+		typeset -A currentEnvMap
+		while IFS='=' read -r key value; do
+			currentEnvMap["$key"]="$value"
+		done < <(env)
+
+		for k in "${(@k)vsc_aa_env}"; do
+			# if currentEnvMap does not have the key, then it is missing
+			if ! [[ -v currentEnvMap[$k] ]]; then
+				builtin printf '\e]633;EnvSingleDelete;%s;%s;%s\a' "${(Q)k}" "$(__vsc_escape_value "${vsc_aa_env[$k]}")" "$__vsc_nonce"
+				builtin unset "vsc_aa_env[$k]"
+			fi
+		done
+	fi
+}
+
+__update_env_cache() {
+	local key="$1"
+	local value="$2"
+
+	for (( i=1; i <= $#vsc_env_keys; i++ )); do
+		if [[ "${vsc_env_keys[$i]}" == "$key" ]]; then
+			if [[ "${vsc_env_values[$i]}" != "$value" ]]; then
+				vsc_env_values[$i]="$value"
+				builtin printf '\e]633;EnvSingleEntry;%s;%s;%s\a' "$key" "$(__vsc_escape_value "$value")" "$__vsc_nonce"
+			fi
+			return
+		fi
+	done
+
+		# Key does not exist so add key, value pair
+		vsc_env_keys+=("$key")
+		vsc_env_values+=("$value")
+		builtin printf '\e]633;EnvSingleEntry;%s;%s;%s\a' "$key" "$(__vsc_escape_value "$value")" "$__vsc_nonce"
+}
+
+__track_missing_env_vars() {
+	local currentEnvKeys=();
+
+	while IFS='=' read -r key value; do
+		currentEnvKeys+=("$key");
+	done < <(env);
+
+	# Compare vsc_env_keys with user's currentEnvKeys
+	for ((i = 1; i <= ${#vsc_env_keys[@]}; i++)); do
+		local found=0;
+		for envKey in "${currentEnvKeys[@]}"; do
+			if [[ "${vsc_env_keys[$i]}" == "$envKey" ]]; then
+				found=1;
+				break;
+			fi;
+		done;
+		if [ "$found" = 0 ]; then
+			builtin printf '\e]633;EnvSingleDelete;%s;%s;%s\a' "${vsc_env_keys[$i]}" "$(__vsc_escape_value "${vsc_env_values[$i]}")" "$__vsc_nonce";
+			unset "vsc_env_keys[$i]";
+			unset "vsc_env_values[$i]";
+		fi;
+	done;
+
+	# Remove gaps from unset
+	vsc_env_keys=("${(@)vsc_env_keys}");
+	vsc_env_values=("${(@)vsc_env_values}");
+}
+
+
+__vsc_update_env() {
+	# Should we disable for older windows and also check __vscode_disable_env_reporting (conpty dll stuff)?
+	builtin printf '\e]633;EnvSingleStart;%s;\a' $__vsc_nonce
+	if [ $use_associative_array -eq 1 ]; then
+		if [[ ${#vsc_aa_env[@]} -eq 0 ]]; then
+			# Associative array is empty, do not diff, just add
+			while IFS='=' read -r key value; do
+				vsc_aa_env["$key"]="$value"
+				builtin printf '\e]633;EnvSingleEntry;%s;%s;%s\a' "$key" "$(__vsc_escape_value "$value")" "$__vsc_nonce"
+			done < <(env)
+		else
+			# Diff approach for associative array
+			while IFS='=' read -r key value; do
+				__update_env_cache_aa "$key" "$value"
+			done < <(env)
+			__track_missing_env_vars_aa
+
+		fi
+	else
+		# Two arrays approach
+		if [[ ${#vsc_env_keys[@]} -eq 0 ]] && [[ ${#vsc_env_values[@]} -eq 0 ]]; then
+			# Non-associative arrays are both empty, do not diff, just add
+			while IFS='=' read -r key value; do
+				vsc_env_keys+=("$key")
+				vsc_env_values+=("$value")
+				builtin printf '\e]633;EnvSingleEntry;%s;%s;%s\a' "$key" "$(__vsc_escape_value "$value")" "$__vsc_nonce"
+			done < <(env)
+		else
+			# Diff approach for non-associative arrays
+			while IFS='=' read -r key value; do
+				__update_env_cache "$key" "$value"
+			done < <(env)
+			__track_missing_env_vars
+
+		fi
+	fi
+
+	builtin printf '\e]633;EnvSingleEnd;%s;\a' $__vsc_nonce
 }
 
 __vsc_command_output_start() {
@@ -173,6 +301,8 @@ __vsc_precmd() {
 		# non null
 		__vsc_update_prompt
 	fi
+	# TODO: only run for insiders
+	__vsc_update_env
 }
 
 __vsc_preexec() {
