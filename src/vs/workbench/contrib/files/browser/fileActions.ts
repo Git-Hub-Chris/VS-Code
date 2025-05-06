@@ -755,8 +755,8 @@ export function validateFileName(pathService: IPathService, item: ExplorerItem, 
 
 	// Check for invalid file name.
 	if (names.some(folderName => !pathService.hasValidBasename(item.resource, os, folderName))) {
-		// Escape * characters
-		const escapedName = name.replace(/\*/g, '\\*'); // CodeQL [SM02383] This only processes filenames which are enforced against having backslashes in them farther up in the stack.
+		// Escape backslashes and * characters
+		const escapedName = name.replace(/\\/g, '\\\\').replace(/\*/g, '\\*'); // CodeQL [SM02383] Ensure backslashes are escaped before processing asterisks.
 		return {
 			content: nls.localize('invalidFileNameError', "The name **{0}** is not valid as a file or folder name. Please choose a different name.", trimLongName(escapedName)),
 			severity: Severity.Error
