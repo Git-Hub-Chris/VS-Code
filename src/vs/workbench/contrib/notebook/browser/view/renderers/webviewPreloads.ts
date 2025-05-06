@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { Event } from '../../../../../../base/common/event.js';
+import DOMPurify from 'dompurify';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
 import type * as webviewMessages from './webviewMessages.js';
 import type { NotebookCellMetadata } from '../../../common/notebookCommon.js';
@@ -2917,8 +2918,9 @@ async function webviewPreloads(ctx: PreloadContext) {
 
 			this._content = { preferredRendererId, preloadErrors };
 			if (content.type === 0 /* RenderOutputType.Html */) {
-				const trustedHtml = ttPolicy?.createHTML(content.htmlContent) ?? content.htmlContent;
-				this.element.innerHTML = trustedHtml as string;  // CodeQL [SM03712] The content comes from renderer extensions, not from direct user input.
+				const sanitizedHtml = DOMPurify.sanitize(content.htmlContent);
+				const trustedHtml = ttPolicy?.createHTML(sanitizedHtml) ?? sanitizedHtml;
+				this.element.innerHTML = trustedHtml as string;  // CodeQL [SM03712] Sanitized before assignment to innerHTML.
 			} else if (preloadErrors.some(e => e instanceof Error)) {
 				const errors = preloadErrors.filter((e): e is Error => e instanceof Error);
 				showRenderError(`Error loading preloads`, this.element, errors);
