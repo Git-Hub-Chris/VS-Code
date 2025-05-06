@@ -275,9 +275,9 @@ export class TerminalProfileQuickpick {
 			}
 			const argsString = profile.args.map(e => {
 				if (e.includes(' ')) {
-					return `"${e.replace(/"/g, '\\"')}"`; // CodeQL [SM02383] js/incomplete-sanitization This is only used as a label on the UI so this isn't a problem
+					return `"${e.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`; // Properly escape backslashes and double quotes
 				}
-				return e;
+				return e.replace(/\\/g, '\\\\'); // Escape backslashes even if the string does not contain spaces
 			}).join(' ');
 			return { label, description: `${friendlyPath} ${argsString}`, profile, profileName: profile.profileName, buttons, iconClasses };
 		}
