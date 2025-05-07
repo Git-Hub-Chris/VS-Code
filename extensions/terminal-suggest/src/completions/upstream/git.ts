@@ -310,16 +310,20 @@ export const gitGenerators: Record<string, Fig.Generator> = {
 			return Object.keys(remoteURLs).map((remote) => {
 				const url = remoteURLs[remote];
 				let icon = "box";
-				if (url.includes("github.com")) {
-					icon = "github";
-				}
+				try {
+					const parsedUrl = new URL(url);
+					const host = parsedUrl.host;
 
-				if (url.includes("gitlab.com")) {
-					icon = "gitlab";
-				}
-
-				if (url.includes("heroku.com")) {
-					icon = "heroku";
+					if (host === "github.com") {
+						icon = "github";
+					} else if (host === "gitlab.com") {
+						icon = "gitlab";
+					} else if (host === "heroku.com") {
+						icon = "heroku";
+					}
+				} catch (e) {
+					// Handle invalid URLs gracefully
+					console.error(`Invalid URL: ${url}`);
 				}
 				return {
 					name: remote,
