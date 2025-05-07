@@ -1,4 +1,6 @@
 name: Prevent package-lock.json changes in PRs
+permissions:
+  contents: read
 on: [pull_request]
 
 jobs:
