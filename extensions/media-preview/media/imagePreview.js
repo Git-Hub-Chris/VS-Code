@@ -311,7 +311,18 @@
 		document.body.classList.remove('loading');
 	});
 
-	image.src = settings.src;
+	try {
+		const url = new URL(settings.src, window.location.origin);
+		if (url.protocol === 'http:' || url.protocol === 'https:') {
+			image.src = url.href;
+		} else {
+			throw new Error('Invalid URL protocol');
+		}
+	} catch (err) {
+		console.error('Invalid image source URL:', err);
+		document.body.classList.add('error');
+		document.body.classList.remove('loading');
+	}
 
 	document.querySelector('.open-file-link')?.addEventListener('click', (e) => {
 		e.preventDefault();
