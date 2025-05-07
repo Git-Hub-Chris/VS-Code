@@ -174,7 +174,7 @@ suite('Terminal Contrib Suggest Recordings', () => {
 									});
 								}
 							}));
-						} else if (event.data.match('\x1b\]633;Completions;.+\[.+\]')) {
+						} else if (event.data.match('\x1b]633;Completions;.+\[.+\]')) {
 							// If the output contains a pwsh completions sequence with results, wait for the associated
 							// suggest addon event until proceeding.
 							promises.push(new Promise<void>(r => {
