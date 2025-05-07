@@ -99,7 +99,12 @@ onceDocumentLoaded(() => {
 
 			iframe.src = url.toString();
 		} catch {
-			iframe.src = rawUrl;
+			// Validate and sanitize rawUrl before assigning it to iframe.src
+			if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+				iframe.src = encodeURI(rawUrl);
+			} else {
+				console.error('Invalid URL:', rawUrl);
+			}
 		}
 
 		vscode.setState({ url: rawUrl });
