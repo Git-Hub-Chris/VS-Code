@@ -12,6 +12,7 @@ import throttle = require('lodash.throttle');
 import morphdom from 'morphdom';
 import type { ToWebviewMessage } from '../types/previewMessaging';
 import { isOfScheme, Schemes } from '../src/util/schemes';
+import DOMPurify from 'dompurify';
 
 let scrollDisabledCount = 0;
 
@@ -206,7 +207,8 @@ window.addEventListener('message', async event => {
 			const root = document.querySelector('.markdown-body')!;
 
 			const parser = new DOMParser();
-			const newContent = parser.parseFromString(data.content, 'text/html'); // CodeQL [SM03712] This renderers content from the workspace into the Markdown preview. Webviews (and the markdown preview) have many other security measures in place to make this safe
+			const sanitizedContent = DOMPurify.sanitize(data.content);
+			const newContent = parser.parseFromString(sanitizedContent, 'text/html'); // CodeQL [SM03712] This renderers content from the workspace into the Markdown preview. Webviews (and the markdown preview) have many other security measures in place to make this safe
 
 			// Strip out meta http-equiv tags
 			for (const metaElement of Array.from(newContent.querySelectorAll('meta'))) {
