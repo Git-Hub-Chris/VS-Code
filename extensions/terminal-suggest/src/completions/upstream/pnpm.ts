@@ -25,7 +25,7 @@ const searchBranches: Fig.Generator = {
 				if (parts[0] == "*") {
 					// Current branch.
 					return {
-						name: elm.replace("*", "").trim(),
+						name: elm.replace(/\*/g, "").trim(),
 						description: "Current branch",
 						icon: "⭐️",
 					};
