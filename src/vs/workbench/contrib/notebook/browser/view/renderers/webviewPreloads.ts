@@ -2433,7 +2433,8 @@ async function webviewPreloads(ctx: PreloadContext) {
 			if (!el) {
 				return;
 			}
-			const trustedHtml = ttPolicy?.createHTML(html) ?? html;
+			const sanitizedHtml = DOMPurify.sanitize(html);
+			const trustedHtml = ttPolicy?.createHTML(sanitizedHtml) ?? sanitizedHtml;
 			el.innerHTML = trustedHtml as string; // CodeQL [SM03712] The rendered content comes from VS Code's tokenizer and is considered safe
 			const root = el.getRootNode();
 			if (root instanceof ShadowRoot) {
