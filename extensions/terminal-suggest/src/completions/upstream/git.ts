@@ -80,7 +80,7 @@ const postProcessBranches =
 							}
 							// Current branch
 							return {
-								name: branch.replace("*", "").trim(),
+								name: branch.replace(/\*/g, "").trim(),
 								description: "Current branch",
 								priority: 100,
 								icon: "⭐️",
