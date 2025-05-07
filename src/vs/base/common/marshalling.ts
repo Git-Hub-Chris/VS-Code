@@ -6,6 +6,7 @@
 import { VSBuffer } from './buffer.js';
 import { URI, UriComponents } from './uri.js';
 import { MarshalledId } from './marshallingIds.js';
+import _ from 'lodash';
 
 export function stringify(obj: any): string {
 	return JSON.stringify(obj, replacer);
@@ -51,7 +52,10 @@ export function revive<T = any>(obj: any, depth = 0): Revived<T> {
 
 		switch ((<MarshalledObject>obj).$mid) {
 			case MarshalledId.Uri: return <any>URI.revive(obj);
-			case MarshalledId.Regexp: return <any>new RegExp(obj.source, obj.flags);
+			case MarshalledId.Regexp: {
+				const safeSource = _.escapeRegExp(obj.source);
+				return <any>new RegExp(safeSource, obj.flags);
+			}
 			case MarshalledId.Date: return <any>new Date(obj.source);
 		}
 
