@@ -1082,6 +1082,10 @@ function applyUpdate<T>(value: T | undefined, update: T): ApplyUpdateResult<T> {
 	let didChange = false;
 	for (const key in update) {
 		if ((update as T & object).hasOwnProperty(key)) {
+			// Skip prototype-polluting keys
+			if (key === '__proto__' || key === 'constructor') {
+				continue;
+			}
 			const result = applyUpdate(value[key], update[key]);
 			if (result.didChange) {
 				value[key] = result.newValue;
