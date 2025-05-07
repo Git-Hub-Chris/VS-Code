@@ -21,6 +21,24 @@
 		throw new Error(`Could not load settings`);
 	}
 
+	/**
+	 * Validates and sanitizes a URL to ensure it is safe for use.
+	 * @param {string} url The URL to validate.
+	 * @returns {string} A sanitized URL or an empty string if invalid.
+	 */
+	function sanitizeUrl(url) {
+		try {
+			const parsedUrl = new URL(url, document.baseURI);
+			// Allow only specific protocols (e.g., http, https)
+			if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+				return parsedUrl.href;
+			}
+		} catch {
+			// Invalid URL
+		}
+		return '';
+	}
+
 	const settings = getSettings();
 
 	// State
@@ -29,7 +47,7 @@
 	// Elements
 	const video = document.createElement('video');
 	if (settings.src !== null) {
-		video.src = settings.src;
+		video.src = sanitizeUrl(settings.src);
 	}
 	video.playsInline = true;
 	video.controls = true;
