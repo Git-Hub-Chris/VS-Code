@@ -1,5 +1,8 @@
 name: Basic checks
 
+permissions:
+  contents: read
+
 on: workflow_dispatch
 
 # on:
