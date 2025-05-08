@@ -1067,6 +1067,7 @@ const blockGfm = {
         .replace('fences', ' {0,3}(?:`{3,}(?=[^`\\n]*\\n)|~{3,})[^\\n]*\\n')
         .replace('list', ' {0,3}(?:[*+-]|1[.)]) ') // only lists starting from 1 can interrupt
         .replace('html', '</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)>', 'i')
+        .replace('tag', _tag, 'i') // Ensure case-insensitivity for tag matching
         .replace('tag', _tag) // pars can be interrupted by type (6) html blocks
         .getRegex(),
 };
